@@ -42,36 +42,36 @@ fu_huddly_usb_firmware_build(FuFirmware *firmware, XbNode *n, GError **error)
 	return TRUE;
 }
 
-static gboolean
-fu_huddly_usb_validate(FuFirmware *firmware,
-					GInputStream *stream,
-					gsize offset,
-					GError **error)
-{
-	return fu_struct_huddly_usb_header_validate_stream(stream,
-						     offset,
-						     error);
-}
+// static gboolean
+// fu_huddly_usb_validate(FuFirmware *firmware,
+// 					GInputStream *stream,
+// 					gsize offset,
+// 					GError **error)
+// {
+// 	return fu_struct_huddly_usb_header_validate_stream(stream,
+// 						     offset,
+// 						     error);
+// }
 
-static gboolean
-fu_huddly_usb_firmware_parse(FuFirmware *firmware,
-				 GInputStream *stream,
-				 gsize offset,
-				 FwupdInstallFlags flags,
-				 GError **error)
-{
-	FuHuddlyUsbFirmware *self = FU_HUDDLY_USB_FIRMWARE(firmware);
-	g_autoptr(GByteArray) st_hdr = NULL;
+// static gboolean
+// fu_huddly_usb_firmware_parse(FuFirmware *firmware,
+// 				 GInputStream *stream,
+// 				 gsize offset,
+// 				 FwupdInstallFlags flags,
+// 				 GError **error)
+// {
+// 	FuHuddlyUsbFirmware *self = FU_HUDDLY_USB_FIRMWARE(firmware);
+// 	g_autoptr(GByteArray) st_hdr = NULL;
 
-	/* TODO: parse firmware into images */
-	st_hdr = fu_struct_huddly_usb_hdr_parse_stream(stream, offset, error);
-	if (st_hdr == NULL)
-		return FALSE;
-	self->start_addr = 0x1234;
-	fu_firmware_set_version(firmware, "1.2.3");
-	fu_firmware_set_bytes(firmware, fw);
-	return TRUE;
-}
+// 	/* TODO: parse firmware into images */
+// 	st_hdr = fu_struct_huddly_usb_hdr_parse_stream(stream, offset, error);
+// 	if (st_hdr == NULL)
+// 		return FALSE;
+// 	self->start_addr = 0x1234;
+// 	fu_firmware_set_version(firmware, "1.2.3");
+// 	//fu_firmware_set_bytes(firmware, fw);
+// 	return TRUE;
+// }
 
 static GByteArray *
 fu_huddly_usb_firmware_write(FuFirmware *firmware, GError **error)
@@ -112,8 +112,8 @@ static void
 fu_huddly_usb_firmware_class_init(FuHuddlyUsbFirmwareClass *klass)
 {
 	FuFirmwareClass *firmware_class = FU_FIRMWARE_CLASS(klass);
-	firmware_class->validate = fu_huddly_usb_validate;
-	firmware_class->parse = fu_huddly_usb_firmware_parse;
+	// firmware_class->validate = fu_huddly_usb_validate;
+	// firmware_class->parse = fu_huddly_usb_firmware_parse;
 	firmware_class->write = fu_huddly_usb_firmware_write;
 	firmware_class->build = fu_huddly_usb_firmware_build;
 	firmware_class->export = fu_huddly_usb_firmware_export;
