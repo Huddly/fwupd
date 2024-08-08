@@ -91,8 +91,8 @@ fu_huddly_usb_device_probe(FuDevice *device, GError **error)
 		return FALSE;
 
 	/* TODO: probe the device for properties available before it is opened */
-	if (fu_device_has_private_flag(device, FU_HUDDLY_USB_DEVICE_FLAG_EXAMPLE))
-		self->start_addr = 0x100;
+	// if (fu_device_has_private_flag(device, FU_HUDDLY_USB_DEVICE_FLAG_EXAMPLE))
+	// 	self->start_addr = 0x100;
 	/* success */
 	return TRUE;
 }
