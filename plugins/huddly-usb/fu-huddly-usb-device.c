@@ -11,15 +11,73 @@
 #include "fu-huddly-usb-firmware.h"
 #include "fu-huddly-usb-struct.h"
 
+enum { EP_OUT, EP_IN, EP_LAST };
+
 /* this can be set using Flags=example in the quirk file  */
 #define FU_HUDDLY_USB_DEVICE_FLAG_EXAMPLE (1 << 0)
 
 struct _FuHuddlyUsbDevice {
 	FuUsbDevice parent_instance;
 	guint16 start_addr;
+	guint bulk_ep[EP_LAST];
 };
 
 G_DEFINE_TYPE(FuHuddlyUsbDevice, fu_huddly_usb_device, FU_TYPE_USB_DEVICE)
+
+
+static gboolean fu_huddly_usb_device_find_interface(FuDevice *device, GError **error)
+{
+	FuHuddlyUsbDevice *self = FU_HUDDLY_USB_DEVICE(device);
+	g_autoptr(GPtrArray) intfs = NULL;
+	intfs = fu_usb_device_get_interfaces(FU_USB_DEVICE(device), error);
+
+	if(intfs != NULL)
+	{
+		g_print("Number of interfaces %u\n", intfs->len);
+		for(guint i = 0; i < intfs->len; i++){
+			FuUsbInterface *intf = g_ptr_array_index(intfs, i);
+			g_autoptr(GPtrArray) endpoints = fu_usb_interface_get_endpoints(intf);
+			g_print("USB endpoints %u ...\n", endpoints->len);
+			g_print("Interface class %u\n", fu_usb_interface_get_class(intf));
+			for(guint j = 0; j < endpoints->len; j++)
+			{
+				FuUsbEndpoint* ep = g_ptr_array_index(endpoints, j);
+				if(fu_usb_endpoint_get_direction(ep) == FU_USB_DIRECTION_HOST_TO_DEVICE)
+				{
+					self->bulk_ep[EP_OUT] = fu_usb_endpoint_get_address(ep);
+					g_print("Add output endpoint %x\n", self->bulk_ep[EP_OUT]);
+				}
+				else
+				{
+					self->bulk_ep[EP_IN] = fu_usb_endpoint_get_address(ep);
+					g_print("Add input endpoint %x\n", self->bulk_ep[EP_IN] );
+				}
+			}
+		}
+		return TRUE;
+	}
+	else
+	{
+		g_print("ERROR: Could not find interface\n");
+		return FALSE;
+	}
+}
+
+// static void fu_huddly_usb_hlink_vsc_connect(FuHuddlyUsbDevice* device){
+// 	guint8 interface_hid = 0;
+// 	// Find interface
+// 	interface_hid = fu_usb_device_get_interface_for_class(FU_USB_DEVICE(device), FU_USB_CLASS_)
+
+// 	// Claim usb interface
+// 	fu_usb_device_open()
+
+
+// 	// Send hlink reset
+
+// 	// send hlink salute
+// }
+
+
 
 static void
 fu_huddly_usb_device_to_string(FuDevice *device, guint idt, GString *str)
@@ -94,7 +152,8 @@ fu_huddly_usb_device_probe(FuDevice *device, GError **error)
 	// if (fu_device_has_private_flag(device, FU_HUDDLY_USB_DEVICE_FLAG_EXAMPLE))
 	// 	self->start_addr = 0x100;
 	/* success */
-	return TRUE;
+	return fu_huddly_usb_device_find_interface(device, error);
+	// return TRUE;
 }
 
 static gboolean
