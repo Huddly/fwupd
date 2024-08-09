@@ -36,21 +36,24 @@ static gboolean fu_huddly_usb_device_find_interface(FuDevice *device, GError **e
 		g_print("Number of interfaces %u\n", intfs->len);
 		for(guint i = 0; i < intfs->len; i++){
 			FuUsbInterface *intf = g_ptr_array_index(intfs, i);
-			g_autoptr(GPtrArray) endpoints = fu_usb_interface_get_endpoints(intf);
-			g_print("USB endpoints %u ...\n", endpoints->len);
-			g_print("Interface class %u\n", fu_usb_interface_get_class(intf));
-			for(guint j = 0; j < endpoints->len; j++)
+			if(fu_usb_interface_get_class(intf) == FU_USB_CLASS_VENDOR_SPECIFIC)
 			{
-				FuUsbEndpoint* ep = g_ptr_array_index(endpoints, j);
-				if(fu_usb_endpoint_get_direction(ep) == FU_USB_DIRECTION_HOST_TO_DEVICE)
+				g_autoptr(GPtrArray) endpoints = fu_usb_interface_get_endpoints(intf);
+				g_print("USB endpoints %u ...\n", endpoints->len);
+			
+				for(guint j = 0; j < endpoints->len; j++)
 				{
-					self->bulk_ep[EP_OUT] = fu_usb_endpoint_get_address(ep);
-					g_print("Add output endpoint %x\n", self->bulk_ep[EP_OUT]);
-				}
-				else
-				{
-					self->bulk_ep[EP_IN] = fu_usb_endpoint_get_address(ep);
-					g_print("Add input endpoint %x\n", self->bulk_ep[EP_IN] );
+					FuUsbEndpoint* ep = g_ptr_array_index(endpoints, j);
+					if(fu_usb_endpoint_get_direction(ep) == FU_USB_DIRECTION_HOST_TO_DEVICE)
+					{
+						self->bulk_ep[EP_OUT] = fu_usb_endpoint_get_address(ep);
+						g_print("Add output endpoint %x\n", self->bulk_ep[EP_OUT]);
+					}
+					else
+					{
+						self->bulk_ep[EP_IN] = fu_usb_endpoint_get_address(ep);
+						g_print("Add input endpoint %x\n", self->bulk_ep[EP_IN] );
+					}
 				}
 			}
 		}
