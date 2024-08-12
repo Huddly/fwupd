@@ -94,6 +94,7 @@ static void fu_huddly_usb_hlink_buffer_dispose(HLinkBuffer* buffer)
 
 static void fu_huddly_usb_hlink_buffer_create(HLinkBuffer* buffer, const gchar* msg_name, guint8* payload, guint32 payload_size)
 {
+	memset(&buffer->header, 0x00, sizeof(HLinkHeader));
 	buffer->header.msg_name_size = strlen(msg_name);
 	buffer->msg_name =(gchar*)g_malloc(buffer->header.msg_name_size);
 	// change to fu_memcpy_safe
@@ -116,17 +117,24 @@ static gsize fu_huddly_usb_hlink_packet_size(HLinkBuffer *buffer)
     return sizeof(HLinkHeader) + buffer->header.msg_name_size + buffer->header.payload_size;
 }
 
-static void fu_huddly_usb_hlink_buffer_to_packet(GByteArray *packet, HLinkBuffer *buffer)
+static void fu_huddly_usb_hlink_buffer_to_packet(GByteArray *packet, HLinkBuffer *buffer, GError **error)
 {
     guint32 offset = 0; 
     gsize pkt_sz = fu_huddly_usb_hlink_packet_size(buffer);
     fu_byte_array_set_size(packet, pkt_sz, 0u);
-    
-    memcpy(packet->data, &buffer->header, sizeof(HLinkHeader));
+    if(!fu_memcpy_safe(packet->data, packet->len, 0, (guint8*)&buffer->header, sizeof(HLinkHeader), 0, sizeof(HLinkHeader), error)){
+	g_error("Memcpy 1 failed\n");
+    }
     offset += sizeof(HLinkHeader);
-    memcpy(&packet->data[offset], buffer->msg_name, buffer->header.msg_name_size);
+    if(!fu_memcpy_safe(packet->data, packet->len, offset, (guint8*)buffer->msg_name, buffer->header.msg_name_size, 0, buffer->header.msg_name_size, error))
+    {
+	g_error("Memcpy 2 failed\n");
+    }
     offset += buffer->header.msg_name_size;
-    memcpy(&packet->data[offset], buffer->payload, buffer->header.payload_size);
+    if(!fu_memcpy_safe(packet->data, packet->len, offset, buffer->payload, buffer->header.payload_size, 0, buffer->header.payload_size, error))
+    {
+	g_error("Memcpy 3 failed\n");
+    }
 }
 
 static gboolean fu_huddly_usb_packet_to_hlink_buffer(HLinkBuffer *buffer, guint8 *packet, guint32 packet_sz)
@@ -159,7 +167,7 @@ static gboolean fu_huddly_usb_device_hlink_send(FuDevice* device, HLinkBuffer* b
 	g_autoptr(GByteArray) buf = g_byte_array_new();
 
 	gsize actual_size = 0;
-	fu_huddly_usb_hlink_buffer_to_packet(buf, buffer);
+	fu_huddly_usb_hlink_buffer_to_packet(buf, buffer, error);
 	return fu_usb_device_bulk_transfer(FU_USB_DEVICE(device), 
 		self->bulk_ep[EP_OUT], 
 		buf->data,
