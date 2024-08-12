@@ -251,6 +251,8 @@ static void fu_huddly_usb_device_get_version(FuDevice* device, GError **error){
 		res = fu_huddly_usb_device_hlink_send(device, &send_buf, error);
 		if(!res){
 			g_prefix_error(error, "Send failed with error: ");
+		}else{
+			g_print("Send OK\n");
 		}
 	}
 	if(res)
@@ -266,10 +268,13 @@ static void fu_huddly_usb_device_get_version(FuDevice* device, GError **error){
 		res = fu_huddly_usb_device_hlink_unsubscribe(device, "prodinfo/get_msgpack_reply", error);
 		if(!res){
 			g_prefix_error(error, "Unsubscribe failed with error:");
+		}else{
+			g_print("UNSUBSCribe OK\n");
 		}
 	}
-
+	g_print("Dispose send buf\n");
 	fu_huddly_usb_hlink_buffer_dispose(&send_buf);
+	g_print("Dispose read buf\n");
 	fu_huddly_usb_hlink_buffer_dispose(&receive_buf);
 
 
