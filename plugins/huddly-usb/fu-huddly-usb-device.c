@@ -184,7 +184,7 @@ static gboolean fu_huddly_usb_device_hlink_send(FuDevice* device, HLinkBuffer* b
 
 static gboolean fu_huddly_usb_device_hlink_receive(FuDevice* device, HLinkBuffer *buffer, GError **error)
 {
-	#define RECEIVE_BUFFER_SIZE 8192
+	#define RECEIVE_BUFFER_SIZE 1024
 	g_autoptr(GByteArray) buf = g_byte_array_new();
 	gsize received_length = 0;
 	FuHuddlyUsbDevice* self = FU_HUDDLY_USB_DEVICE(device);
