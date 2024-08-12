@@ -131,9 +131,12 @@ static void fu_huddly_usb_hlink_buffer_to_packet(GByteArray *packet, HLinkBuffer
 	g_error("Memcpy 2 failed\n");
     }
     offset += buffer->header.msg_name_size;
-    if(!fu_memcpy_safe(packet->data, packet->len, offset, buffer->payload, buffer->header.payload_size, 0, buffer->header.payload_size, error))
+    if(buffer->header.payload_size > 0)
     {
-	g_error("Memcpy 3 failed\n");
+    	if(!fu_memcpy_safe(packet->data, packet->len, offset, buffer->payload, buffer->header.payload_size, 0, buffer->header.payload_size, error))
+    	{
+		g_error("Memcpy 3 failed\n");
+    	}
     }
 }
 
