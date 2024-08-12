@@ -66,6 +66,128 @@ static gboolean fu_huddly_usb_device_find_interface(FuDevice *device, GError **e
 	}
 }
 
+typedef struct {
+	guint32 req_id;
+	guint32 res_id;
+	guint16  flags;
+	guint16 msg_name_size;
+	guint32 payload_size;
+} HLinkHeader;
+
+typedef struct {
+    HLinkHeader header;
+    gchar* msg_name;
+    guint8 *payload;
+} HLinkBuffer;
+
+static void fu_huddly_usb_hlink_buffer_create(HLinkBuffer* buffer, gchar* msg_name, guint8* payload, guint32 payload_size)
+{
+    buffer->header.msg_name_size = strlen(msg_name);
+    buffer->msg_name =(gchar*)g_malloc(buffer->header.msg_name_size);
+    // change to fu_memcpy_safe
+    memcpy(buffer->msg_name, msg_name, buffer->header.msg_name_size);
+    
+    buffer->header.payload_size = payload_size;
+    buffer->payload = (guint8*)g_malloc(buffer->header.payload_size);
+    memcpy(buffer->payload, payload, payload_size);
+}
+
+
+static void fu_huddly_usb_hlink_buffer_from_str(HLinkBuffer* buffer, gchar* msg_name, gchar* body)
+{
+    guint32 payload_length = strlen(body);
+    fu_huddly_usb_hlink_buffer_create(buffer, msg_name, (guint8*)body, payload_length);
+}
+
+static gsize fu_huddly_usb_hlink_packet_size(HLinkBuffer *buffer)
+{
+    return sizeof(HLinkHeader) + buffer->header.msg_name_size + buffer->header.payload_size;
+}
+
+static void fu_huddly_usb_hlink_buffer_to_packet(GByteArray *packet, HLinkBuffer *buffer)
+{
+    guint32 offset = 0; 
+    gsize pkt_sz = fu_huddly_usb_hlink_packet_size(buffer);
+    fu_byte_array_set_size(packet, pkt_sz, 0u);
+    
+    memcpy(packet->data, &buffer->header, sizeof(HLinkHeader));
+    offset += sizeof(HLinkHeader);
+    memcpy(&packet->data[offset], &buffer->msg_name, buffer->header.msg_name_size);
+    offset += buffer->header.msg_name_size;
+    memcpy(&packet->data[offset], buffer->payload, buffer->header.payload_size);
+}
+
+static gboolean fu_huddly_usb_packet_to_hlink_buffer(HLinkBuffer *buffer, guint8 *packet, guint32 packet_sz)
+{
+    guint32 offset = 0;
+    if(packet_sz < sizeof(HLinkHeader)){
+        g_printerr("Insufficient packet size\n");
+        return FALSE;
+    }
+    memcpy((guint8*)&(buffer->header), packet, sizeof(HLinkHeader));
+
+    if(packet_sz < fu_huddly_usb_hlink_packet_size(buffer))
+    {
+        return FALSE;
+    }
+    offset = sizeof(HLinkHeader);
+
+    memcpy(buffer->msg_name, packet + offset, buffer->header.msg_name_size);
+    offset += buffer->header.msg_name_size;
+    memcpy(buffer->payload, packet + offset, buffer->header.payload_size);
+    return TRUE;
+}
+
+static void fu_huddly_usb_hlink_buffer_dispose(HLinkBuffer* buffer)
+{
+    g_free(buffer->msg_name);
+    g_free(buffer->payload);
+}
+
+
+static gboolean fu_huddly_usb_device_hlink_send(FuDevice* device, HLinkBuffer* buffer, GError **error)
+{
+	FuHuddlyUsbDevice* self = FU_HUDDLY_USB_DEVICE(device);
+	g_autoptr(GByteArray) buf = g_byte_array_new();
+
+	gsize actual_size = 0;
+	fu_huddly_usb_hlink_buffer_to_packet(buf, buffer);
+	return fu_usb_device_bulk_transfer(FU_USB_DEVICE(device), 
+		self->bulk_ep[EP_OUT], 
+		buf->data,
+		buf->len,
+		&actual_size, 
+		2000, 
+		NULL, 
+		error
+		);
+}
+
+static gboolean fu_huddly_usb_device_hlink_receive(FuDevice* device, HLinkBuffer *buffer, GError **error)
+{
+	#define RECEIVE_BUFFER_SIZE 8192
+	g_autoptr(GByteArray) buf = g_byte_array_new();
+	gsize received_length = 0;
+	FuHuddlyUsbDevice* self = FU_HUDDLY_USB_DEVICE(device);
+	fu_byte_array_set_size(buf, RECEIVE_BUFFER_SIZE, 0u);
+	if(!fu_usb_device_bulk_transfer(FU_USB_DEVICE(device), self->bulk_ep[EP_IN], 
+		buf->data,
+		buf->len, 
+		&received_length,
+		2000, 
+		NULL, 
+		error
+		))
+	{
+		return FALSE;
+	}
+	if(!fu_huddly_usb_packet_to_hlink_buffer(buffer, buf->data, received_length)){
+		return FALSE;
+	}
+	return TRUE;
+	
+}
+
 // static void fu_huddly_usb_hlink_vsc_connect(FuHuddlyUsbDevice* device){
 // 	guint8 interface_hid = 0;
 // 	// Find interface
