@@ -182,7 +182,7 @@ static gboolean fu_huddly_usb_device_hlink_receive(FuDevice* device, HLinkBuffer
 		buf->data,
 		buf->len, 
 		&received_length,
-		5000, 
+		20000, 
 		NULL, 
 		error
 		))
