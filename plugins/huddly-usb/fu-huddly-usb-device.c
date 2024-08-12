@@ -124,7 +124,7 @@ static void fu_huddly_usb_hlink_buffer_to_packet(GByteArray *packet, HLinkBuffer
     
     memcpy(packet->data, &buffer->header, sizeof(HLinkHeader));
     offset += sizeof(HLinkHeader);
-    memcpy(&packet->data[offset], &buffer->msg_name, buffer->header.msg_name_size);
+    memcpy(&packet->data[offset], buffer->msg_name, buffer->header.msg_name_size);
     offset += buffer->header.msg_name_size;
     memcpy(&packet->data[offset], buffer->payload, buffer->header.payload_size);
 }
