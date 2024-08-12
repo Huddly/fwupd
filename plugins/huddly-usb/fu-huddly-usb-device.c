@@ -182,13 +182,13 @@ static gboolean fu_huddly_usb_device_hlink_receive(FuDevice* device, HLinkBuffer
 		buf->data,
 		buf->len, 
 		&received_length,
-		2000, 
+		5000, 
 		NULL, 
 		error
 		))
 	{ 
 		g_error("Failed hlink receive\n");
-		g_prefix_error("Error: ");
+		g_prefix_error(error, "Error: ");
 		return FALSE;
 	}
 	else
