@@ -80,8 +80,10 @@ typedef struct {
     guint8 *payload;
 } HLinkBuffer;
 
-static void fu_huddly_usb_hlink_buffer_dispose(HLinkBuffer* buffer)
+
+static void fu_huddly_usb_hlink_buffer_free(HLinkBuffer* buffer)
 {
+	g_print("Free buffer\n");
 	if(buffer->msg_name != NULL){
     		g_free(buffer->msg_name);
     		buffer->msg_name = NULL;
@@ -90,10 +92,17 @@ static void fu_huddly_usb_hlink_buffer_dispose(HLinkBuffer* buffer)
 		g_free(buffer->payload);
 		buffer->payload = NULL;
 	}
+	g_free(buffer);
+	buffer = NULL;
 }
 
-static void fu_huddly_usb_hlink_buffer_create(HLinkBuffer* buffer, const gchar* msg_name, guint8* payload, guint32 payload_size)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(HLinkBuffer, fu_huddly_usb_hlink_buffer_free)
+
+
+static HLinkBuffer* fu_huddly_usb_hlink_buffer_create(const gchar* msg_name, guint8* payload, guint32 payload_size)
 {
+	HLinkBuffer* buffer = g_new0(HLinkBuffer, 1);
+	g_print("Create buffer\n");
 	memset(&buffer->header, 0x00, sizeof(HLinkHeader));
 	buffer->header.msg_name_size = strlen(msg_name);
 	buffer->msg_name =(gchar*)g_malloc(buffer->header.msg_name_size);
@@ -103,13 +112,15 @@ static void fu_huddly_usb_hlink_buffer_create(HLinkBuffer* buffer, const gchar* 
     	buffer->header.payload_size = payload_size;
     	buffer->payload = (guint8*)g_malloc(buffer->header.payload_size);
     	memcpy(buffer->payload, payload, payload_size);
+
+	return buffer;
 }
 
 
-static void fu_huddly_usb_hlink_buffer_from_str(HLinkBuffer* buffer, const gchar* msg_name, const gchar* body)
+static HLinkBuffer* fu_huddly_usb_hlink_buffer_from_str(const gchar* msg_name, const gchar* body)
 {
     guint32 payload_length = strlen(body);
-    fu_huddly_usb_hlink_buffer_create(buffer, msg_name, (guint8*)body, payload_length);
+    return fu_huddly_usb_hlink_buffer_create(msg_name, (guint8*)body, payload_length);
 }
 
 static gsize fu_huddly_usb_hlink_packet_size(HLinkBuffer *buffer)
@@ -218,39 +229,39 @@ static gboolean fu_huddly_usb_device_hlink_receive(FuDevice* device, HLinkBuffer
 static gboolean fu_huddly_usb_device_hlink_subscribe(FuDevice* device, const gchar* subscription, GError** error)
 {
 	gboolean result = FALSE;
-	HLinkBuffer send_buffer;
+	g_autoptr(HLinkBuffer) send_buffer = fu_huddly_usb_hlink_buffer_from_str("hlink-mb-subscribe", subscription);;
 	g_print("Subscribe %s\n", subscription);
-	fu_huddly_usb_hlink_buffer_from_str(&send_buffer, "hlink-mb-subscribe", subscription);
-	result = fu_huddly_usb_device_hlink_send(device, &send_buffer, error);
+	
+	result = fu_huddly_usb_device_hlink_send(device, send_buffer, error);
 	if(result){
 		g_print("OK\n");
 	}
 	else{
 		g_print("FAILED\n");
 	}
-	fu_huddly_usb_hlink_buffer_dispose(&send_buffer);
+	// fu_huddly_usb_hlink_buffer_free(&send_buffer);
 	return result;
 }
 
 static gboolean fu_huddly_usb_device_hlink_unsubscribe(FuDevice* device, const gchar* subscription, GError** error)
 {
 	gboolean result = FALSE;
-	HLinkBuffer send_buffer;
+	g_autoptr(HLinkBuffer) send_buffer = fu_huddly_usb_hlink_buffer_from_str("hlink-mb-unsubscribe", subscription);
 	g_print("Unsubscribe %s\n", subscription);
-	fu_huddly_usb_hlink_buffer_from_str(&send_buffer, "hlink-mb-unsubscribe", subscription);
-	result = fu_huddly_usb_device_hlink_send(device, &send_buffer, error);
+	
+	result = fu_huddly_usb_device_hlink_send(device, send_buffer, error);
 	if(result){
 		g_print("OK\n");
 	}
 	else{
 		g_print("FAILED\n");
 	}
-	fu_huddly_usb_hlink_buffer_dispose(&send_buffer);
+	// fu_huddly_usb_hlink_buffer_free(&send_buffer);
 	return result;
 }
 
 static void fu_huddly_usb_device_get_version(FuDevice* device, GError **error){
-	HLinkBuffer send_buf, receive_buf;
+	g_autoptr(HLinkBuffer) send_buf = NULL, receive_buf = NULL;
 	gboolean res = FALSE;
 	gboolean subscribed = FALSE;
 	
@@ -266,8 +277,8 @@ static void fu_huddly_usb_device_get_version(FuDevice* device, GError **error){
 	}
 	if(res)
 	{
-		fu_huddly_usb_hlink_buffer_create(&send_buf, "prodinfo/get_msgpack", NULL, 0);
-		res = fu_huddly_usb_device_hlink_send(device, &send_buf, error);
+		send_buf = fu_huddly_usb_hlink_buffer_create("prodinfo/get_msgpack", NULL, 0);
+		res = fu_huddly_usb_device_hlink_send(device, send_buf, error);
 		if(!res){
 			g_prefix_error(error, "Send failed with error: ");
 		}else{
@@ -276,12 +287,13 @@ static void fu_huddly_usb_device_get_version(FuDevice* device, GError **error){
 	}
 	if(res)
 	{
-		res = fu_huddly_usb_device_hlink_receive(device, &receive_buf, error);
+		receive_buf = g_new0(HLinkBuffer, 1);
+		res = fu_huddly_usb_device_hlink_receive(device, receive_buf, error);
 		if(!res){
 			g_prefix_error(error, "Receive failed with error: ");
 		}
 
-		g_print("Receive data %s\n", receive_buf.msg_name);
+		g_print("Receive data %s\n", receive_buf->msg_name);
 	}
 	if(subscribed){
 		res = fu_huddly_usb_device_hlink_unsubscribe(device, "prodinfo/get_msgpack_reply", error);
@@ -291,10 +303,10 @@ static void fu_huddly_usb_device_get_version(FuDevice* device, GError **error){
 			g_print("UNSUBSCribe OK\n");
 		}
 	}
-	g_print("Dispose send buf\n");
-	fu_huddly_usb_hlink_buffer_dispose(&send_buf);
-	g_print("Dispose read buf\n");
-	fu_huddly_usb_hlink_buffer_dispose(&receive_buf);
+	// g_print("Dispose send buf\n");
+	// fu_huddly_usb_hlink_buffer_free(&send_buf);
+	// g_print("Dispose read buf\n");
+	// fu_huddly_usb_hlink_buffer_free(&receive_buf);
 
 
 }
