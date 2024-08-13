@@ -559,7 +559,10 @@ fu_huddly_usb_device_setup(FuDevice *device, GError **error)
 		g_print("Got version %s\n", version_string->str);
 		fu_device_set_version(device, version_string->str);
 	}
-	fu_device_set_version(device, "1.2.3");
+	else{
+		g_error("Failed to read device version!\n");
+		return FALSE;
+	}
 
 	/* success */
 	return TRUE;
