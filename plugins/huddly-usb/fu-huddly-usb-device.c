@@ -151,25 +151,44 @@ static void fu_huddly_usb_hlink_buffer_to_packet(GByteArray *packet, HLinkBuffer
     }
 }
 
-static gboolean fu_huddly_usb_packet_to_hlink_buffer(HLinkBuffer *buffer, guint8 *packet, guint32 packet_sz)
+static gboolean fu_huddly_usb_packet_to_hlink_buffer(HLinkBuffer *buffer, guint8 *packet, guint32 packet_sz, GError **error)
 {
-    guint32 offset = 0;
-    if(packet_sz < sizeof(HLinkHeader)){
-        g_printerr("Insufficient packet size\n");
-        return FALSE;
-    }
-    memcpy((guint8*)&(buffer->header), packet, sizeof(HLinkHeader));
+	gsize offset = 0;
+	gboolean res;
+	if(packet_sz < sizeof(HLinkHeader)){
+		g_printerr("Insufficient packet size\n");
+		return FALSE;
+	}
+	g_print("Copy header information\n");
+    	res = fu_memcpy_safe((guint8*)&buffer->header, sizeof(HLinkHeader), 0, packet, packet_sz, 0, sizeof(HLinkHeader), error);
+	if(!res){
+		g_error("Copy header failed\n");
+		return FALSE;
+	}
+//     memcpy((guint8*)&(buffer->header), packet, sizeof(HLinkHeader));
 
-    if(packet_sz < fu_huddly_usb_hlink_packet_size(buffer))
-    {
-        return FALSE;
-    }
-    offset = sizeof(HLinkHeader);
-
-    memcpy(buffer->msg_name, packet + offset, buffer->header.msg_name_size);
-    offset += buffer->header.msg_name_size;
-    memcpy(buffer->payload, packet + offset, buffer->header.payload_size);
-    return TRUE;
+	if(packet_sz < fu_huddly_usb_hlink_packet_size(buffer))
+	{
+		g_error("Packet size too small\n");
+		return FALSE;
+	}
+	offset = sizeof(HLinkHeader);
+	buffer->msg_name = g_new0(gchar, buffer->header.msg_name_size);
+	res = fu_memcpy_safe((guint8*)buffer->msg_name, buffer->header.msg_name_size, 0, packet, packet_sz, offset, buffer->header.msg_name_size, error);
+    	if(!res){
+		g_error("Copy msg name failed\n");
+		return FALSE;
+	}
+//     memcpy(buffer->msg_name, packet + offset, buffer->header.msg_name_size);
+	offset += buffer->header.msg_name_size;
+	buffer->payload = g_new0(guint8, buffer->header.payload_size);
+	res = fu_memcpy_safe(buffer->payload, buffer->header.payload_size, 0, packet, packet_sz, offset, buffer->header.payload_size, error);
+//     memcpy(buffer->payload, packet + offset, buffer->header.payload_size);
+	if(!res){
+		g_error("Copy msg payload failed\n");
+		return FALSE;
+	}
+    	return TRUE;
 }
 
 
@@ -226,7 +245,8 @@ static gboolean fu_huddly_usb_device_hlink_receive(FuDevice* device, HLinkBuffer
 	}
 	else
 	{
-		if(!fu_huddly_usb_packet_to_hlink_buffer(buffer, buf->data, received_length)){
+		g_print("Received data. Creating hlink buffer\n");
+		if(!fu_huddly_usb_packet_to_hlink_buffer(buffer, buf->data, received_length, error)){
 			g_error("Failed to create hlink buffer\n");
 			return FALSE;
 		}
