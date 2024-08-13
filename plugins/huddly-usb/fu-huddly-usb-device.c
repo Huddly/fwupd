@@ -188,6 +188,20 @@ static gboolean fu_huddly_usb_device_bulk_write(FuDevice *device, GByteArray* bu
 		);
 }
 
+static gboolean fu_huddly_usb_device_bulk_read(FuDevice *device, GByteArray* buf, gsize* received_length, GError **error)
+{
+	FuHuddlyUsbDevice* self = FU_HUDDLY_USB_DEVICE(device);
+	return fu_usb_device_bulk_transfer(FU_USB_DEVICE(device), self->bulk_ep[EP_IN], 
+		buf->data,
+		buf->len, 
+		received_length,
+		20000, 
+		NULL, 
+		error
+		);
+	
+}
+
 static gboolean fu_huddly_usb_device_hlink_send(FuDevice* device, HLinkBuffer* buffer, GError **error)
 {
 	g_autoptr(GByteArray) buf = g_byte_array_new();
@@ -202,16 +216,9 @@ static gboolean fu_huddly_usb_device_hlink_receive(FuDevice* device, HLinkBuffer
 	#define RECEIVE_BUFFER_SIZE 1024
 	g_autoptr(GByteArray) buf = g_byte_array_new();
 	gsize received_length = 0;
-	FuHuddlyUsbDevice* self = FU_HUDDLY_USB_DEVICE(device);
+	
 	fu_byte_array_set_size(buf, RECEIVE_BUFFER_SIZE, 0u);
-	if(!fu_usb_device_bulk_transfer(FU_USB_DEVICE(device), self->bulk_ep[EP_IN], 
-		buf->data,
-		buf->len, 
-		&received_length,
-		20000, 
-		NULL, 
-		error
-		))
+	if(!fu_huddly_usb_device_bulk_read(device, buf, &received_length, error))
 	{ 
 		g_error("Failed hlink receive\n");
 		g_prefix_error(error, "Error: ");
@@ -274,10 +281,18 @@ static void fu_huddly_usb_device_send_reset(FuDevice *device, GError **error)
 static void fu_huddly_usb_device_salute(FuDevice *device, GError **error)
 {
 	g_autoptr(GByteArray) salutation = g_byte_array_new();
+	g_autoptr(GByteArray) response = g_byte_array_new();
 	guint8 data = 0x00;
+	gsize received_length = 0;
 	g_byte_array_append(salutation, &data, 1);
 
 	fu_huddly_usb_device_bulk_write(device, salutation, error);
+	
+	g_byte_array_set_size(response, 100);
+
+	fu_huddly_usb_device_bulk_read(device, response, &received_length, error);
+	response->data[received_length] = '\0';
+	g_print("Received response %s\n", (gchar*)response->data);
 }
 
 static void fu_huddly_usb_device_get_version(FuDevice* device, GError **error){
