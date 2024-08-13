@@ -371,6 +371,22 @@ static GString *fu_huddly_usb_device_get_pack_string(guint8* buffer, gsize buffe
     return value;
 }
 
+/**
+ * Trim string at first occurrence of c
+ */
+void fu_huddly_usb_device_trim_string_at(GString *str, gchar c)
+{
+	gsize i = 0;
+	while(*(str->str + i) != '\0')
+	{
+		if(*(str->str + i) == c){
+			g_string_truncate(str, i);
+			return;
+		}
+		++i;
+	}
+}
+
 static GString* fu_huddly_usb_device_get_version(FuDevice* device, GError **error){
 	GString* version_string = NULL;
 	g_autoptr(HLinkBuffer) send_buf = NULL, receive_buf = NULL;
@@ -539,6 +555,7 @@ fu_huddly_usb_device_setup(FuDevice *device, GError **error)
 	version_string = fu_huddly_usb_device_get_version(device, error);
 
 	if(version_string != NULL){
+		fu_huddly_usb_device_trim_string_at(version_string, '-');
 		g_print("Got version %s\n", version_string->str);
 		fu_device_set_version(device, version_string->str);
 	}
