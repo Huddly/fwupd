@@ -315,7 +315,64 @@ static void fu_huddly_usb_device_salute(FuDevice *device, GError **error)
 	g_print("Received response %s\n", (gchar*)response->data);
 }
 
-static void fu_huddly_usb_device_get_version(FuDevice* device, GError **error){
+/* Get information about a string from a msgpack formatted buffer. The string info includes the 
+ format length as well as the string length. 
+ */
+
+static gboolean fu_huddly_usb_device_get_pack_string_info(gsize* format_bytes, gsize* string_length, guint8* p){
+     if((*p & 0xe0) == 0xa0){
+        //fixstr
+        *string_length = (*p & 0x1f);
+        *format_bytes = 1;
+        return TRUE;
+    }
+    else if(*p == 0xd9)
+    {
+        *string_length = (gsize)*(p+1);
+        *format_bytes = 2;
+        return TRUE;
+    }
+    else if(*p == 0xda)
+    {
+        *string_length = ((gsize)*(p+1) << 8) | (gsize)*(p+2);
+        *format_bytes = 3;
+        return TRUE;
+    }
+    else if(*p == 0xdb)
+    {
+        *string_length = ((gsize)*(p+1) << 24) | ((gsize)*(p+2) << 16) | ((gsize)*(p+3) << 8) | (gsize)*(p+4);
+        *format_bytes = 5;
+        return TRUE;
+    }
+    g_error("Type 0x%x not a string\n", *p);
+    return FALSE;
+}
+
+/**
+ * Search for a key name in a msgpack map and retrieve the following string
+ */
+static GString *fu_huddly_usb_device_get_pack_string(guint8* buffer, gsize buffer_size, const gchar* key)
+{
+    gchar *cursor;
+    gsize string_length;
+    gsize format_bytes;
+    GString* value = NULL;
+    cursor = (gchar*)buffer;
+    cursor = g_strstr_len(cursor, buffer_size, key);
+    if(!cursor){
+        g_error("Could not find key\n");
+    }
+    cursor += strlen(key);
+    if(!fu_huddly_usb_device_get_pack_string_info(&format_bytes, &string_length, (guint8*)cursor)){
+        return value;
+    }
+    cursor = cursor + format_bytes;
+    value = g_string_new_len(cursor, string_length);
+    return value;
+}
+
+static GString* fu_huddly_usb_device_get_version(FuDevice* device, GError **error){
+	GString* version_string = NULL;
 	g_autoptr(HLinkBuffer) send_buf = NULL, receive_buf = NULL;
 	gboolean res = FALSE;
 	gboolean subscribed = FALSE;
@@ -349,6 +406,8 @@ static void fu_huddly_usb_device_get_version(FuDevice* device, GError **error){
 		}
 
 		g_print("Receive data %s\n", receive_buf->msg_name);
+
+		version_string = fu_huddly_usb_device_get_pack_string(receive_buf->payload, receive_buf->header.payload_size, "app_version");
 	}
 	if(subscribed){
 		res = fu_huddly_usb_device_hlink_unsubscribe(device, "prodinfo/get_msgpack_reply", error);
@@ -358,6 +417,7 @@ static void fu_huddly_usb_device_get_version(FuDevice* device, GError **error){
 			g_print("UNSUBSCribe OK\n");
 		}
 	}
+	return version_string;
 	// g_print("Dispose send buf\n");
 	// fu_huddly_usb_hlink_buffer_free(&send_buf);
 	// g_print("Dispose read buf\n");
@@ -463,6 +523,7 @@ static gboolean
 fu_huddly_usb_device_setup(FuDevice *device, GError **error)
 {
 	FuHuddlyUsbDevice *self = FU_HUDDLY_USB_DEVICE(device);
+	g_autoptr(GString) version_string = NULL;
 
 	/* UsbDevice->setup */
 	if (!FU_DEVICE_CLASS(fu_huddly_usb_device_parent_class)->setup(device, error))
@@ -475,9 +536,12 @@ fu_huddly_usb_device_setup(FuDevice *device, GError **error)
 	fu_huddly_usb_device_send_reset(device, error);
 	fu_huddly_usb_device_salute(device, error);
 
-	fu_huddly_usb_device_get_version(device, error);
+	version_string = fu_huddly_usb_device_get_version(device, error);
 
-
+	if(version_string != NULL){
+		g_print("Got version %s\n", version_string->str);
+		fu_device_set_version(device, version_string->str);
+	}
 	fu_device_set_version(device, "1.2.3");
 
 	/* success */
