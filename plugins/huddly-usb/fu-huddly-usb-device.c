@@ -173,15 +173,10 @@ static gboolean fu_huddly_usb_packet_to_hlink_buffer(HLinkBuffer *buffer, guint8
 }
 
 
-
-
-static gboolean fu_huddly_usb_device_hlink_send(FuDevice* device, HLinkBuffer* buffer, GError **error)
+static gboolean fu_huddly_usb_device_bulk_write(FuDevice *device, GByteArray* buf, GError **error)
 {
-	FuHuddlyUsbDevice* self = FU_HUDDLY_USB_DEVICE(device);
-	g_autoptr(GByteArray) buf = g_byte_array_new();
-
 	gsize actual_size = 0;
-	fu_huddly_usb_hlink_buffer_to_packet(buf, buffer, error);
+	FuHuddlyUsbDevice* self = FU_HUDDLY_USB_DEVICE(device);
 	return fu_usb_device_bulk_transfer(FU_USB_DEVICE(device), 
 		self->bulk_ep[EP_OUT], 
 		buf->data,
@@ -191,6 +186,15 @@ static gboolean fu_huddly_usb_device_hlink_send(FuDevice* device, HLinkBuffer* b
 		NULL, 
 		error
 		);
+}
+
+static gboolean fu_huddly_usb_device_hlink_send(FuDevice* device, HLinkBuffer* buffer, GError **error)
+{
+	g_autoptr(GByteArray) buf = g_byte_array_new();
+
+	gsize actual_size = 0;
+	fu_huddly_usb_hlink_buffer_to_packet(buf, buffer, error);
+	return fu_huddly_usb_device_bulk_write(device, buf, error);
 }
 
 static gboolean fu_huddly_usb_device_hlink_receive(FuDevice* device, HLinkBuffer *buffer, GError **error)
@@ -258,6 +262,21 @@ static gboolean fu_huddly_usb_device_hlink_unsubscribe(FuDevice* device, const g
 	}
 	// fu_huddly_usb_hlink_buffer_free(&send_buffer);
 	return result;
+}
+
+static void fu_huddly_usb_device_send_reset(FuDevice *device, GError **error)
+{
+	g_autoptr(GByteArray) packet = g_byte_array_new(); //Empty packet
+
+	fu_huddly_usb_device_bulk_write(device, packet, error);
+}
+
+static void fu_huddly_usb_device_salute(FuDevice *device, GError **error)
+{
+	g_autoptr(GByteArray) salutation = g_byte_array_sized_new(1);
+	salutation->data[0] = 0x00;
+
+	fu_huddly_usb_device_bulk_write(device, salutation, error);
 }
 
 static void fu_huddly_usb_device_get_version(FuDevice* device, GError **error){
@@ -415,6 +434,9 @@ fu_huddly_usb_device_setup(FuDevice *device, GError **error)
 
 	/* TODO: get the version and other properties from the hardware while open */
 	g_assert(self != NULL);
+
+	fu_huddly_usb_device_send_reset(device, error);
+	fu_huddly_usb_device_salute(device, error);
 
 	fu_huddly_usb_device_get_version(device, error);
 
