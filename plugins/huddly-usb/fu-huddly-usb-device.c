@@ -273,8 +273,9 @@ static void fu_huddly_usb_device_send_reset(FuDevice *device, GError **error)
 
 static void fu_huddly_usb_device_salute(FuDevice *device, GError **error)
 {
-	g_autoptr(GByteArray) salutation = g_byte_array_sized_new(1);
-	salutation->data[0] = 0x00;
+	g_autoptr(GByteArray) salutation = g_byte_array_new();
+	guint8 data = 0x00;
+	g_byte_array_append(salutation, &data, 1);
 
 	fu_huddly_usb_device_bulk_write(device, salutation, error);
 }
@@ -435,6 +436,7 @@ fu_huddly_usb_device_setup(FuDevice *device, GError **error)
 	/* TODO: get the version and other properties from the hardware while open */
 	g_assert(self != NULL);
 
+	fu_huddly_usb_device_send_reset(device, error);
 	fu_huddly_usb_device_send_reset(device, error);
 	fu_huddly_usb_device_salute(device, error);
 
