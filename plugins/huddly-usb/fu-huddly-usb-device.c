@@ -76,6 +76,7 @@ static gboolean fu_huddly_usb_interface_detach_media_kernel_drivers(FuDevice* de
 		//Interfaces already claimed. Nothing to do
 		return TRUE;
 	}
+	g_print("Detach media drivers\n");
 	intfs = fu_usb_device_get_interfaces(FU_USB_DEVICE(device), error);
 	if(intfs != NULL)
 	{
@@ -113,6 +114,7 @@ static gboolean fu_huddly_usb_interface_reattach_media_kernel_drivers(FuDevice* 
 		//Interfaces have not been claimed. There is nothing to release
 		return TRUE;
 	}
+	g_print("Reattach media drivers\n");
 	intfs = fu_usb_device_get_interfaces(FU_USB_DEVICE(device), error);
 	if(intfs != NULL)
 	{
@@ -541,7 +543,7 @@ static gboolean
 fu_huddly_usb_device_detach(FuDevice *device, FuProgress *progress, GError **error)
 {
 	FuHuddlyUsbDevice *self = FU_HUDDLY_USB_DEVICE(device);
-
+	g_print("USB device detach\n");
 	/* sanity check */
 	if (fu_device_has_flag(device, FWUPD_DEVICE_FLAG_IS_BOOTLOADER)) {
 		g_debug("already in bootloader mode, skipping");
@@ -559,7 +561,7 @@ static gboolean
 fu_huddly_usb_device_attach(FuDevice *device, FuProgress *progress, GError **error)
 {
 	FuHuddlyUsbDevice *self = FU_HUDDLY_USB_DEVICE(device);
-
+	g_print("USB device attach\n");
 	/* sanity check */
 	if (!fu_device_has_flag(device, FWUPD_DEVICE_FLAG_IS_BOOTLOADER)) {
 		g_debug("already in runtime mode, skipping");
@@ -820,6 +822,7 @@ static void
 fu_huddly_usb_device_finalize(GObject *object)
 {
 	FuHuddlyUsbDevice *self = FU_HUDDLY_USB_DEVICE(object);
+	g_printf("Finalize\n");
 
 	/* TODO: free any allocated instance state here */
 	g_assert(self != NULL);
