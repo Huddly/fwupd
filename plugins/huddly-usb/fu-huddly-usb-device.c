@@ -844,8 +844,8 @@ fu_huddly_usb_device_class_init(FuHuddlyUsbDeviceClass *klass)
 	device_class->reload = fu_huddly_usb_device_reload;
 	device_class->prepare = fu_huddly_usb_device_prepare;
 	device_class->cleanup = fu_huddly_usb_device_cleanup;
-	device_class->attach = fu_huddly_usb_device_attach;
-	device_class->detach = fu_huddly_usb_device_detach;
+	//device_class->attach = fu_huddly_usb_device_attach;
+	//device_class->detach = fu_huddly_usb_device_detach;
 	device_class->prepare_firmware = fu_huddly_usb_device_prepare_firmware;
 	device_class->write_firmware = fu_huddly_usb_device_write_firmware;
 	device_class->set_quirk_kv = fu_huddly_usb_device_set_quirk_kv;
