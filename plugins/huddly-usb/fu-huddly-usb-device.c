@@ -100,8 +100,46 @@ static gboolean fu_huddly_usb_interface_detach_media_kernel_drivers(FuDevice* de
 	}
 	self->interfaces_claimed = TRUE;
 	return TRUE;
-	
 }
+
+/* Reattach media kernel drivers after update */
+static gboolean fu_huddly_usb_interface_reattach_media_kernel_drivers(FuDevice* device, GError **error)
+{
+	FuHuddlyUsbDevice *self = FU_HUDDLY_USB_DEVICE(device);
+	g_autoptr(GPtrArray) intfs = NULL;
+
+	if(!self->interfaces_claimed)
+	{
+		//Interfaces have not been claimed. There is nothing to release
+		return TRUE;
+	}
+	intfs = fu_usb_device_get_interfaces(FU_USB_DEVICE(device), error);
+	if(intfs != NULL)
+	{
+		for(guint i=0; i < intfs->len; i++)
+		{
+			guint8 interface_class, interface_subclass;
+			FuUsbInterface *intf = g_ptr_array_index(intfs, i);
+			interface_class = fu_usb_interface_get_class(intf);
+			interface_subclass = fu_usb_interface_get_subclass(intf);
+			if(((interface_class == FU_USB_CLASS_AUDIO) || (interface_class == FU_USB_CLASS_VIDEO)) && (interface_subclass == 0x01))
+			{
+				guint8 iface_number = fu_usb_interface_get_number(intf);
+				if(!fu_usb_device_release_interface(FU_USB_DEVICE(device), iface_number, FU_USB_DEVICE_CLAIM_FLAG_KERNEL_DRIVER, error))
+				{
+					g_error("Failed to relase USB media interface\n");
+					return FALSE;
+				}
+			}
+		}
+	}else
+	{
+		return FALSE;
+	}
+	self->interfaces_claimed = TRUE;
+	return TRUE;
+}
+
 
 typedef struct {
 	guint32 req_id;
@@ -574,6 +612,13 @@ fu_huddly_usb_device_setup(FuDevice *device, GError **error)
 	/* TODO: get the version and other properties from the hardware while open */
 	g_assert(self != NULL);
 
+	if(!fu_huddly_usb_interface_detach_media_kernel_drivers(device, error))
+	{
+		g_print("Failed to detach media kernel drivers\n");
+		
+		return FALSE;
+	}
+
 	fu_huddly_usb_device_send_reset(device, error);
 	fu_huddly_usb_device_send_reset(device, error);
 	fu_huddly_usb_device_salute(device, error);
@@ -601,7 +646,7 @@ fu_huddly_usb_device_prepare(FuDevice *device,
 				 GError **error)
 {
 	FuHuddlyUsbDevice *self = FU_HUDDLY_USB_DEVICE(device);
-	/* TODO: anything the device has to do before the update starts */
+	
 	g_assert(self != NULL);
 	return TRUE;
 }
@@ -614,7 +659,13 @@ fu_huddly_usb_device_cleanup(FuDevice *device,
 {
 	FuHuddlyUsbDevice *self = FU_HUDDLY_USB_DEVICE(device);
 	/* TODO: anything the device has to do when the update has completed */
+	g_print("CLEANUP\n");
+	// Reattach media kernel drivers
+
 	g_assert(self != NULL);
+	if(!fu_huddly_usb_interface_reattach_media_kernel_drivers(device, error)){
+		return FALSE;
+	}
 	return TRUE;
 }
 
