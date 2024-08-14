@@ -20,6 +20,8 @@ struct _FuHuddlyUsbDevice {
 	FuUsbDevice parent_instance;
 	guint16 start_addr;
 	guint bulk_ep[EP_LAST];
+	gboolean initialized;
+	gboolean interfaces_claimed;
 };
 
 G_DEFINE_TYPE(FuHuddlyUsbDevice, fu_huddly_usb_device, FU_TYPE_USB_DEVICE)
@@ -30,16 +32,13 @@ static gboolean fu_huddly_usb_device_find_interface(FuDevice *device, GError **e
 	FuHuddlyUsbDevice *self = FU_HUDDLY_USB_DEVICE(device);
 	g_autoptr(GPtrArray) intfs = NULL;
 	intfs = fu_usb_device_get_interfaces(FU_USB_DEVICE(device), error);
-
 	if(intfs != NULL)
 	{
-		g_print("Number of interfaces %u\n", intfs->len);
 		for(guint i = 0; i < intfs->len; i++){
 			FuUsbInterface *intf = g_ptr_array_index(intfs, i);
 			if(fu_usb_interface_get_class(intf) == FU_USB_CLASS_VENDOR_SPECIFIC)
 			{
 				g_autoptr(GPtrArray) endpoints = fu_usb_interface_get_endpoints(intf);
-				g_print("USB endpoints %u ...\n", endpoints->len);
 			
 				for(guint j = 0; j < endpoints->len; j++)
 				{
@@ -47,12 +46,10 @@ static gboolean fu_huddly_usb_device_find_interface(FuDevice *device, GError **e
 					if(fu_usb_endpoint_get_direction(ep) == FU_USB_DIRECTION_HOST_TO_DEVICE)
 					{
 						self->bulk_ep[EP_OUT] = fu_usb_endpoint_get_address(ep);
-						g_print("Add output endpoint %x\n", self->bulk_ep[EP_OUT]);
 					}
 					else
 					{
 						self->bulk_ep[EP_IN] = fu_usb_endpoint_get_address(ep);
-						g_print("Add input endpoint %x\n", self->bulk_ep[EP_IN] );
 					}
 				}
 			}
@@ -64,6 +61,46 @@ static gboolean fu_huddly_usb_device_find_interface(FuDevice *device, GError **e
 		g_print("ERROR: Could not find interface\n");
 		return FALSE;
 	}
+}
+
+/**
+ * Detach and claim video and audio interfaces before upgrading
+ */
+static gboolean fu_huddly_usb_interface_detach_media_kernel_drivers(FuDevice* device, GError **error)
+{
+	FuHuddlyUsbDevice *self = FU_HUDDLY_USB_DEVICE(device);
+	g_autoptr(GPtrArray) intfs = NULL;
+
+	if(self->interfaces_claimed)
+	{
+		//Interfaces already claimed. Nothing to do
+		return TRUE;
+	}
+	intfs = fu_usb_device_get_interfaces(FU_USB_DEVICE(device), error);
+	if(intfs != NULL)
+	{
+		for(guint i=0; i < intfs->len; i++)
+		{
+			guint8 interface_class;
+			FuUsbInterface *intf = g_ptr_array_index(intfs, i);
+			interface_class = fu_usb_interface_get_class(intf);
+			if((interface_class == FU_USB_CLASS_AUDIO) || (interface_class == FU_USB_CLASS_VIDEO))
+			{
+				guint8 iface_number = fu_usb_interface_get_number(intf);
+				if(!fu_usb_device_claim_interface(FU_USB_DEVICE(device), iface_number, FU_USB_DEVICE_CLAIM_FLAG_KERNEL_DRIVER, error))
+				{
+					g_error("Failed to claim USB media interface\n");
+					return FALSE;
+				}
+			}
+		}
+	}else
+	{
+		return FALSE;
+	}
+	self->interfaces_claimed = TRUE;
+	return TRUE;
+	
 }
 
 typedef struct {
@@ -83,7 +120,6 @@ typedef struct {
 
 static void fu_huddly_usb_hlink_buffer_free(HLinkBuffer* buffer)
 {
-	g_print("Free buffer\n");
 	if(buffer->msg_name != NULL){
     		g_free(buffer->msg_name);
     		buffer->msg_name = NULL;
@@ -102,7 +138,6 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(HLinkBuffer, fu_huddly_usb_hlink_buffer_free)
 static HLinkBuffer* fu_huddly_usb_hlink_buffer_create(const gchar* msg_name, guint8* payload, guint32 payload_size)
 {
 	HLinkBuffer* buffer = g_new0(HLinkBuffer, 1);
-	g_print("Create buffer\n");
 	memset(&buffer->header, 0x00, sizeof(HLinkHeader));
 	buffer->header.msg_name_size = strlen(msg_name);
 	buffer->msg_name =(gchar*)g_malloc(buffer->header.msg_name_size);
@@ -165,7 +200,6 @@ static gboolean fu_huddly_usb_packet_to_hlink_buffer(HLinkBuffer *buffer, guint8
 		g_error("Copy header failed\n");
 		return FALSE;
 	}
-//     memcpy((guint8*)&(buffer->header), packet, sizeof(HLinkHeader));
 
 	if(packet_sz < fu_huddly_usb_hlink_packet_size(buffer))
 	{
@@ -179,11 +213,10 @@ static gboolean fu_huddly_usb_packet_to_hlink_buffer(HLinkBuffer *buffer, guint8
 		g_error("Copy msg name failed\n");
 		return FALSE;
 	}
-//     memcpy(buffer->msg_name, packet + offset, buffer->header.msg_name_size);
+
 	offset += buffer->header.msg_name_size;
 	buffer->payload = g_new0(guint8, buffer->header.payload_size);
 	res = fu_memcpy_safe(buffer->payload, buffer->header.payload_size, 0, packet, packet_sz, offset, buffer->header.payload_size, error);
-//     memcpy(buffer->payload, packet + offset, buffer->header.payload_size);
 	if(!res){
 		g_error("Copy msg payload failed\n");
 		return FALSE;
@@ -291,6 +324,7 @@ static gboolean fu_huddly_usb_device_hlink_unsubscribe(FuDevice* device, const g
 	return result;
 }
 
+/** Send an empty packet to reset hlink communications */
 static void fu_huddly_usb_device_send_reset(FuDevice *device, GError **error)
 {
 	g_autoptr(GByteArray) packet = g_byte_array_new(); //Empty packet
@@ -298,6 +332,7 @@ static void fu_huddly_usb_device_send_reset(FuDevice *device, GError **error)
 	fu_huddly_usb_device_bulk_write(device, packet, error);
 }
 
+/** Send a hlink salute and receive a response from the device */
 static void fu_huddly_usb_device_salute(FuDevice *device, GError **error)
 {
 	g_autoptr(GByteArray) salutation = g_byte_array_new();
@@ -318,7 +353,6 @@ static void fu_huddly_usb_device_salute(FuDevice *device, GError **error)
 /* Get information about a string from a msgpack formatted buffer. The string info includes the 
  format length as well as the string length. 
  */
-
 static gboolean fu_huddly_usb_device_get_pack_string_info(gsize* format_bytes, gsize* string_length, guint8* p){
      if((*p & 0xe0) == 0xa0){
         //fixstr
@@ -348,8 +382,8 @@ static gboolean fu_huddly_usb_device_get_pack_string_info(gsize* format_bytes, g
     return FALSE;
 }
 
-/**
- * Search for a key name in a msgpack map and retrieve the following string
+/** Responses are transmitted as msgpack maps as key-value pairs
+ * Search for a string in a map and return the following string value. 
  */
 static GString *fu_huddly_usb_device_get_pack_string(guint8* buffer, gsize buffer_size, const gchar* key)
 {
@@ -376,14 +410,12 @@ static GString *fu_huddly_usb_device_get_pack_string(guint8* buffer, gsize buffe
  */
 void fu_huddly_usb_device_trim_string_at(GString *str, gchar c)
 {
-	gsize i = 0;
-	while(*(str->str + i) != '\0')
+	for(gsize i=0; i<str->len; i++)
 	{
 		if(*(str->str + i) == c){
 			g_string_truncate(str, i);
 			return;
 		}
-		++i;
 	}
 }
 
@@ -434,12 +466,6 @@ static GString* fu_huddly_usb_device_get_version(FuDevice* device, GError **erro
 		}
 	}
 	return version_string;
-	// g_print("Dispose send buf\n");
-	// fu_huddly_usb_hlink_buffer_free(&send_buf);
-	// g_print("Dispose read buf\n");
-	// fu_huddly_usb_hlink_buffer_free(&receive_buf);
-
-
 }
 
 // static void fu_huddly_usb_hlink_vsc_connect(FuHuddlyUsbDevice* device){
@@ -724,6 +750,8 @@ static void
 fu_huddly_usb_device_init(FuHuddlyUsbDevice *self)
 {
 	self->start_addr = 0x5000;
+	self->initialized = FALSE;
+	self->interfaces_claimed = FALSE;
 	fu_device_set_version_format(FU_DEVICE(self), FWUPD_VERSION_FORMAT_TRIPLET);
 	fu_device_set_remove_delay(FU_DEVICE(self), FU_DEVICE_REMOVE_DELAY_RE_ENUMERATE);
 	fu_device_add_protocol(FU_DEVICE(self), "com.huddly.usb");
