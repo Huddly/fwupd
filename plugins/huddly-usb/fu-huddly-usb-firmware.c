@@ -80,6 +80,8 @@ fu_huddly_usb_firmware_write(FuFirmware *firmware, GError **error)
 	g_autoptr(GByteArray) buf = g_byte_array_new();
 	g_autoptr(GBytes) fw = NULL;
 
+	g_print("Huddly USB firmware write\n");
+
 	/* data first */
 	fw = fu_firmware_get_bytes_with_patches(firmware, error);
 	if (fw == NULL)

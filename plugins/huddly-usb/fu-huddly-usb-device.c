@@ -138,7 +138,7 @@ static gboolean fu_huddly_usb_interface_reattach_media_kernel_drivers(FuDevice* 
 	{
 		return FALSE;
 	}
-	self->interfaces_claimed = TRUE;
+	self->interfaces_claimed = FALSE;
 	return TRUE;
 }
 
@@ -736,6 +736,8 @@ fu_huddly_usb_device_write_firmware(FuDevice *device,
 	FuHuddlyUsbDevice *self = FU_HUDDLY_USB_DEVICE(device);
 	g_autoptr(GInputStream) stream = NULL;
 	g_autoptr(FuChunkArray) chunks = NULL;
+
+	g_print("Huddly USB write firmware\n");
 
 	/* progress */
 	fu_progress_set_id(progress, G_STRLOC);
