@@ -90,7 +90,7 @@ static gboolean fu_huddly_usb_interface_detach_media_kernel_drivers(FuDevice* de
 				guint8 iface_number = fu_usb_interface_get_number(intf);
 				if(!fu_usb_device_claim_interface(FU_USB_DEVICE(device), iface_number, FU_USB_DEVICE_CLAIM_FLAG_KERNEL_DRIVER, error))
 				{
-					g_error("Failed to claim USB media interface\n");
+					g_print("ERROR: Failed to claim USB media interface\n");
 					return FALSE;
 				}
 			}
@@ -129,7 +129,9 @@ static gboolean fu_huddly_usb_interface_reattach_media_kernel_drivers(FuDevice* 
 				guint8 iface_number = fu_usb_interface_get_number(intf);
 				if(!fu_usb_device_release_interface(FU_USB_DEVICE(device), iface_number, FU_USB_DEVICE_CLAIM_FLAG_KERNEL_DRIVER, error))
 				{
-					g_error("Failed to relase USB media interface\n");
+					
+					g_print("ERROR: Failed to relase USB media interface\n");
+				
 					return FALSE;
 				}
 			}
@@ -209,19 +211,19 @@ static void fu_huddly_usb_hlink_buffer_to_packet(GByteArray *packet, HLinkBuffer
     gsize pkt_sz = fu_huddly_usb_hlink_packet_size(buffer);
     fu_byte_array_set_size(packet, pkt_sz, 0u);
     if(!fu_memcpy_safe(packet->data, packet->len, 0, (guint8*)&buffer->header, sizeof(HLinkHeader), 0, sizeof(HLinkHeader), error)){
-	g_error("Memcpy 1 failed\n");
+	g_print("ERROR: Memcpy 1 failed\n");
     }
     offset += sizeof(HLinkHeader);
     if(!fu_memcpy_safe(packet->data, packet->len, offset, (guint8*)buffer->msg_name, buffer->header.msg_name_size, 0, buffer->header.msg_name_size, error))
     {
-	g_error("Memcpy 2 failed\n");
+	g_print("ERROR: Memcpy 2 failed\n");
     }
     offset += buffer->header.msg_name_size;
     if(buffer->header.payload_size > 0)
     {
     	if(!fu_memcpy_safe(packet->data, packet->len, offset, buffer->payload, buffer->header.payload_size, 0, buffer->header.payload_size, error))
     	{
-		g_error("Memcpy 3 failed\n");
+		g_print("ERROR: Memcpy 3 failed\n");
     	}
     }
 }
@@ -237,20 +239,20 @@ static gboolean fu_huddly_usb_packet_to_hlink_buffer(HLinkBuffer *buffer, guint8
 	g_print("Copy header information\n");
     	res = fu_memcpy_safe((guint8*)&buffer->header, sizeof(HLinkHeader), 0, packet, packet_sz, 0, sizeof(HLinkHeader), error);
 	if(!res){
-		g_error("Copy header failed\n");
+		g_print("ERROR: Copy header failed\n");
 		return FALSE;
 	}
 
 	if(packet_sz < fu_huddly_usb_hlink_packet_size(buffer))
 	{
-		g_error("Packet size too small\n");
+		g_print("ERROR: Packet size too small\n");
 		return FALSE;
 	}
 	offset = sizeof(HLinkHeader);
 	buffer->msg_name = g_new0(gchar, buffer->header.msg_name_size);
 	res = fu_memcpy_safe((guint8*)buffer->msg_name, buffer->header.msg_name_size, 0, packet, packet_sz, offset, buffer->header.msg_name_size, error);
     	if(!res){
-		g_error("Copy msg name failed\n");
+		g_print("ERROR: Copy msg name failed\n");
 		return FALSE;
 	}
 
@@ -258,7 +260,7 @@ static gboolean fu_huddly_usb_packet_to_hlink_buffer(HLinkBuffer *buffer, guint8
 	buffer->payload = g_new0(guint8, buffer->header.payload_size);
 	res = fu_memcpy_safe(buffer->payload, buffer->header.payload_size, 0, packet, packet_sz, offset, buffer->header.payload_size, error);
 	if(!res){
-		g_error("Copy msg payload failed\n");
+		g_print("ERROR: Copy msg payload failed\n");
 		return FALSE;
 	}
     	return TRUE;
@@ -312,7 +314,7 @@ static gboolean fu_huddly_usb_device_hlink_receive(FuDevice* device, HLinkBuffer
 	fu_byte_array_set_size(buf, RECEIVE_BUFFER_SIZE, 0u);
 	if(!fu_huddly_usb_device_bulk_read(device, buf, &received_length, error))
 	{ 
-		g_error("Failed hlink receive\n");
+		g_print("ERROR: Failed hlink receive\n");
 		g_prefix_error(error, "Error: ");
 		return FALSE;
 	}
@@ -320,7 +322,7 @@ static gboolean fu_huddly_usb_device_hlink_receive(FuDevice* device, HLinkBuffer
 	{
 		g_print("Received data. Creating hlink buffer\n");
 		if(!fu_huddly_usb_packet_to_hlink_buffer(buffer, buf->data, received_length, error)){
-			g_error("Failed to create hlink buffer\n");
+			g_print("ERROR: Failed to create hlink buffer\n");
 			return FALSE;
 		}
 		g_print("Hlink receive OK!\n");
@@ -418,7 +420,7 @@ static gboolean fu_huddly_usb_device_get_pack_string_info(gsize* format_bytes, g
         *format_bytes = 5;
         return TRUE;
     }
-    g_error("Type 0x%x not a string\n", *p);
+    g_print("ERROR: Type 0x%x not a string\n", *p);
     return FALSE;
 }
 
@@ -434,7 +436,7 @@ static GString *fu_huddly_usb_device_get_pack_string(guint8* buffer, gsize buffe
     cursor = (gchar*)buffer;
     cursor = g_strstr_len(cursor, buffer_size, key);
     if(!cursor){
-        g_error("Could not find key\n");
+        g_print("ERROR: Could not find key\n");
     }
     cursor += strlen(key);
     if(!fu_huddly_usb_device_get_pack_string_info(&format_bytes, &string_length, (guint8*)cursor)){
@@ -633,7 +635,7 @@ fu_huddly_usb_device_setup(FuDevice *device, GError **error)
 		fu_device_set_version(device, version_string->str);
 	}
 	else{
-		g_error("Failed to read device version!\n");
+		g_print("ERROR: Failed to read device version!\n");
 		return FALSE;
 	}
 
