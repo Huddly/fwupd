@@ -806,7 +806,7 @@ fu_huddly_usb_device_set_progress(FuDevice *self, FuProgress *progress)
 static void
 fu_huddly_usb_device_init(FuHuddlyUsbDevice *self)
 {
-	self->start_addr = 0x5000;
+	self->start_addr = 0x0000;
 	self->initialized = FALSE;
 	self->interfaces_claimed = FALSE;
 	fu_device_set_version_format(FU_DEVICE(self), FWUPD_VERSION_FORMAT_TRIPLET);
