@@ -753,14 +753,16 @@ fu_huddly_usb_device_write_firmware(FuDevice *device,
 		return FALSE;
 
 	/* write each block */
-	chunks = fu_chunk_array_new_from_stream(stream, self->start_addr, 64 /* block_size */, error);
-	if (chunks == NULL)
-		return FALSE;
-	if (!fu_huddly_usb_device_write_blocks(self,
-						   chunks,
-						   fu_progress_get_child(progress),
-						   error))
-		return FALSE;
+	// chunks = fu_chunk_array_new_from_stream(stream, self->start_addr, 64 /* block_size */, error);
+	// if (chunks == NULL)
+	// 	return FALSE;
+	// if (!fu_huddly_usb_device_write_blocks(self,
+	// 					   chunks,
+	// 					   fu_progress_get_child(progress),
+	// 					   error))
+	// 	return FALSE;
+	g_print("Huddly USB now writing firmware\n");
+
 	fu_progress_step_done(progress);
 
 	/* TODO: verify each block */
